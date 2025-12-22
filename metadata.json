@@ -1,0 +1,7 @@
+{
+  "name": "FindYourSize Engine",
+  "description": "Professional sneaker size recommendation engine based on official charts, model specifics, and user biometrics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
