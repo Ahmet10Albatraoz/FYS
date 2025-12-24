@@ -116,8 +116,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
           Generate a JSON array of 3 popular Turkish shoe store objects for this shoe.
           Format:
           [
-            { "siteName": "Trendyol", "price": "3499 TL", "url": "https://www.trendyol.com..." },
-            { "siteName": "SuperStep", "price": "3600 TL", "url": "..." }
+            { "siteName": "Trendyol", "price": "* TL", "url": "https://www.trendyol.com..." },
+            { "siteName": "SuperStep", "price": "* TL", "url": "..." }
           ]
           Use realistic estimated prices.
           Return ONLY raw JSON. No markdown formatting.
@@ -150,7 +150,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
     const fetchImage = async () => {
       setIsLoadingImage(true);
       try {
-        const res = await GoogleGenerativeAI({
+        const res = new GoogleGenerativeAI({
           model: 'gemini-2.5-flash-image',
           contents: { parts: [{ text: `High-quality product photo of ${targetBrand.name} ${targetModel} sneaker, white studio background.` }] },
           config: { imageConfig: { aspectRatio: "1:1" } }
