@@ -15,7 +15,7 @@ interface PremiumSupportProps {
   language: Language;
   t: any;
 }
-
+const API_KEY = import.meta.env.API_KEY;
 const PremiumSupport: React.FC<PremiumSupportProps> = ({ isOpen, onClose, language, t }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -37,7 +37,7 @@ const PremiumSupport: React.FC<PremiumSupportProps> = ({ isOpen, onClose, langua
     setIsLoading(true);
 
     try {
-      const API_KEY = process.env.API_KEY;
+     
       const genAI = new GoogleGenerativeAI(API_KEY);
 
       const model = genAI.getGenerativeModel({ 
