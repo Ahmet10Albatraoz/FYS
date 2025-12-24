@@ -35,10 +35,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
         reader.readAsDataURL(file);
       });
 
-      let rawApiKey = import.meta.env?.VITE_API_KEY || process.env.VITE_API_KEY;
+     
+const rawApiKey = import.meta.env.VITE_API_KEY || "";
 
-const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
-      if (!API_KEY) console.error("API KEY YOK.");
+      const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
+
+      if (!API_KEY) {
+        throw new Error("API Key configuration error (Netlify).");
+      }
+
       const genAI = new GoogleGenerativeAI(API_KEY);
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
