@@ -58,7 +58,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
       `; 
 
       const result = await model.generateContent([
-        prompt,
+        promt,
         {
           inlineData: {
             data: base64Data,
@@ -258,3 +258,4 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
 };
 
 export default UploadScreen;
+
