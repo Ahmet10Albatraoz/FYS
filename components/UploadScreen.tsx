@@ -13,8 +13,11 @@ interface UploadScreenProps {
   language: Language;
   t: any;
 }
-const API_KEY = process.env.API_KEY;
-console.log(API_KEY);
+const API_KEY = import.meta.env?.VITE_API_KEY || process.env.REACT_API_KEY;
+
+if (!API_KEY) {
+  console.error("API KEY BULUNAMADI! .env dosyasını ve isimlendirmeyi (VITE_ veya REACT_APP_) kontrol et.");
+}
 const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome, language, t }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scannedData, setScannedData] = useState<UserReference | null>(null);
