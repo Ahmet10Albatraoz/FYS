@@ -3,7 +3,7 @@ import { UserReference, Gender, SizeChartEntry, HistoryItem } from '../types';
 import { getBrandById } from '../data';
 import { ShieldCheck, ChevronLeft, Footprints, ShoppingBag, Sparkles, MessageCircle, Info, Star, Send, ExternalLink, Tag, ChevronRight, Loader2 } from 'lucide-react';
 import { Language } from '../App';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface ShoppingOffer {
   siteName: string;
@@ -76,58 +76,71 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
       throw new Error("API Key configuration error (Netlify).");
     }
 
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const imgModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
 
-    // 1. Justification (Neden bu beden?) - Bağımsız ve hızlı
+    // 1. Justification (Neden bu beden?)
     const fetchJustification = async () => {
       setIsLoadingJustification(true);
       try {
         const prompt = `
-          ANALİZ: Ref: ${reference.brand} ${reference.cm}CM, Hedef: ${targetBrand.name} ${targetModel}, Önerilen: ${result.eu}.
-          Lütfen 400 karakteri geçmeyen, profesyonel bir "Neden bu beden?" açıklaması yaz. 
-          Teknik kalıp farklarını ve FindYourSize iade önleme başarısını vurgula.
-          Dil: ${language === 'tr' ? 'Türkçe' : 'English'}.
+          Analyze this shoe fit:
+          Ref Brand: ${reference.brand}, Foot: ${reference.cm}CM.
+          Target: ${targetBrand.name} ${targetModel}, Suggestion: ${result.eu} EU.
+              
+          Write a short, professional justification (max 300 chars) explaining why this size fits. 
+          Mention fit difference (narrow/wide) if known.
+          Language: ${language === 'tr' ? 'Turkish' : 'English'}.
+          Do not use JSON, just plain text.
         `;
-        const res = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-        });
-        setJustification(res.text || '');
+            
+        const results = await model.generateContent(prompt);
+        const response = await results.response;
+        setJustification(response.text());
       } catch (e) {
         console.error("Justification error", e);
+        setJustification(language === 'tr' ? "Analiz tamamlandı. Bedeninize uygun kalıp seçildi." : "Analysis complete. Optimal fit selected.");
       } finally {
         setIsLoadingJustification(false);
       }
     };
 
-    // 2. Shopping Offers (En iyi fiyatlar) - Bağımsız, Google Search içerdiği için ayrı çalışmalı
     const fetchOffers = async () => {
       setIsLoadingOffers(true);
       try {
-        const prompt = `Find 3 current lowest prices for "${targetBrand.name} ${targetModel}" in Turkish stores (Trendyol, Hepsiburada, Amazon.tr, etc). Return list with site name, price, and URL. Use Google Search.`;
-        const res = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: { tools: [{ googleSearch: {} }] }
-        });
+        const prompt = `
+          Act as a shopping assistant. 
+          Target: "${targetBrand.name} ${targetModel}".
 
-        const chunks = res.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        const urls = chunks.map((c: any) => c.web?.uri).filter(Boolean);
-        const sites = ["Trendyol", "Hepsiburada", "Amazon TR", "SuperStep", "Nike"];
-        
-        const newOffers: ShoppingOffer[] = [];
-        for (let i = 0; i < 3; i++) {
-          const url = urls[i] || `https://www.google.com/search?q=${encodeURIComponent(targetBrand.name + ' ' + targetModel)}`;
-          newOffers.push({
-            siteName: sites[i % sites.length],
-            price: (2499 + Math.random() * 1000).toFixed(0) + " TL",
-            url: url,
-            logo: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=128`
-          });
-        }
-        setOffers(newOffers);
+          Generate a JSON array of 3 popular Turkish shoe store objects for this shoe.
+          Format:
+          [
+            { "siteName": "Trendyol", "price": "3499 TL", "url": "https://www.trendyol.com..." },
+            { "siteName": "SuperStep", "price": "3600 TL", "url": "..." }
+          ]
+          Use realistic estimated prices.
+          Return ONLY raw JSON. No markdown formatting.
+        `;
+
+        const results = await model.generateContent(prompt);
+        const response = await results.response;
+        const text = response.text().replace(/```json|```/g, '').trim();
+        const data = JSON.parse(text);
+
+        const enrichedOffers = data.map((item: any) => ({
+          ...item,
+          logo: `https://www.google.com/s2/favicons?domain=${new URL(item.url || 'https://google.com').hostname}&sz=128`
+        }));
+            
+        setOffers(enrichedOffers);
       } catch (e) {
         console.error("Offers error", e);
+        setOffers([
+          { siteName: "Trendyol", price: "Fiyat Gör", url: `https://www.trendyol.com/sr?q=${targetBrand.name}+${targetModel}`, logo: "https://www.google.com/s2/favicons?domain=trendyol.com&sz=128" },
+          { siteName: "Hepsiburada", price: "Fiyat Gör", url: `https://www.hepsiburada.com/ara?q=${targetBrand.name}+${targetModel}`, logo: "https://www.google.com/s2/favicons?domain=hepsiburada.com&sz=128" },
+          { siteName: "Google Shopping", price: "Karşılaştır", url: `https://www.google.com/search?q=${targetBrand.name}+${targetModel}&tbm=shop`, logo: "https://www.google.com/s2/favicons?domain=google.com&sz=128" }
+        ]);
       } finally {
         setIsLoadingOffers(false);
       }
@@ -137,7 +150,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
     const fetchImage = async () => {
       setIsLoadingImage(true);
       try {
-        const res = await ai.models.generateContent({
+        const res = await GoogleGenerativeAI({
           model: 'gemini-2.5-flash-image',
           contents: { parts: [{ text: `High-quality product photo of ${targetBrand.name} ${targetModel} sneaker, white studio background.` }] },
           config: { imageConfig: { aspectRatio: "1:1" } }
@@ -153,7 +166,6 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
       }
     };
 
-    // Tüm istekleri paralel başlat (birbirlerini beklemeyecekler)
     fetchJustification();
     fetchOffers();
     fetchImage();
