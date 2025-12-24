@@ -14,6 +14,7 @@ interface UploadScreenProps {
   t: any;
 }
 const API_KEY = process.env.API_KEY;
+console.log(API_KEY);
 const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome, language, t }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scannedData, setScannedData] = useState<UserReference | null>(null);
