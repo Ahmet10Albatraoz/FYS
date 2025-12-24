@@ -61,7 +61,7 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
       };
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: `Create a specific outfit combination for ${brand} ${model} sneakers for a ${occasion} occasion. Give specific clothing items for Top, Bottom, and one Accessory. Also provide a short styling tip. Language: ${language === 'tr' ? 'Turkish' : 'English'}.`,
         config: {
           responseMimeType: "application/json",
