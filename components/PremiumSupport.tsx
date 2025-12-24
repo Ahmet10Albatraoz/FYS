@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, User, Bot, Crown, ArrowRight, MessageSquare, ShieldCheck, Footprints } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Language } from '../App';
 
 interface Message {
@@ -37,27 +37,39 @@ const PremiumSupport: React.FC<PremiumSupportProps> = ({ isOpen, onClose, langua
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: [...messages, userMessage].map(m => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }]
-        })),
-        config: {
-          systemInstruction: `Sen FindYourSize Pro'nun özel "Premium Stil ve Ayak Sağlığı Danışmanı"sın. 
+      const API_KEY = process.env.API_KEY;
+      const genAI = new GoogleGenerativeAI(API_KEY);
+
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash",
+        systemInstruction: `Sen FindYourSize Pro'nun özel "Premium Stil ve Ayak Sağlığı Danışmanı"sın. 
           Kullanıcıya ismiyle hitap etme (ismini bilmiyorsun), samimi ama profesyonel bir dil kullan. 
           Uzmanlık alanların: 
           1. Ayak yapısına (taraklı, düz taban vb.) göre model önerisi.
           2. Ayakkabı materyalleri (nubuk, deri, file) ve bunların esneme payları.
           3. Spor ayakkabı bakımı ve temizliği.
           4. Sneaker kültürü ve stil kombinleri.
-          Yanıtlarını kısa, öz ve listeler halinde ver. Dil: ${language === 'tr' ? 'Türkçe' : 'English'}.`,
-          temperature: 0.8,
+          Yanıtlarını kısa, öz ve listeler halinde ver. Markdown kullanabilirsin. 
+          Dil: ${language === 'tr' ? 'Türkçe' : 'English'}.`
+      });
+
+      const history = messages.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+
+      const chat = model.startChat({
+        history: history,
+        generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 500,
         }
       });
 
-      const aiText = response.text || (language === 'tr' ? "Üzgünüm, şu an bağlantı kuramıyorum." : "Sorry, I can't connect right now.");
+      const result = await chat.sendMessage(text);
+      const response = await result.response;
+      const aiText = response.text();
+      
       setMessages(prev => [...prev, { role: 'assistant', content: aiText }]);
     } catch (err) {
       console.error(err);
