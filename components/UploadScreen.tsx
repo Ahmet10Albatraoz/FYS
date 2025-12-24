@@ -39,7 +39,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
       const API_KEY = process.env.API_KEY;
       const genAI = new GoogleGenerativeAI(API_KEY);
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const promt = `
         Analyze the shoe label image.
