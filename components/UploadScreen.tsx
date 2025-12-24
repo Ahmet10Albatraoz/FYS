@@ -95,7 +95,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
       console.error("DEBUG: OCR Full Error Object:", err);
       
       let errorMessage = language === 'tr' 
-        ? "Görsel işlenirken bir hata oluştu. Lütfen manuel doğrulama yapın." 
+        ? "Görsel işlenirken bir hata oluştu. Lütfen manuel doğrulama yapın."+err 
         : "An error occurred while processing the image. Please verify manually.";
 
       if (err.message?.includes("API_KEY_INVALID") || err.status === 403) {
