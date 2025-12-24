@@ -35,7 +35,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
         reader.readAsDataURL(file);
       });
 
-      const API_KEY = import.meta.env?.VITE_API_KEY;
+      let rawApiKey = import.meta.env?.VITE_API_KEY || process.env.VITE_API_KEY;
+
+const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
       if (!API_KEY) console.error("API KEY YOK.");
       const genAI = new GoogleGenerativeAI(API_KEY);
 
