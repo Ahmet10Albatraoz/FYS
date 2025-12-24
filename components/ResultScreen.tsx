@@ -3,7 +3,7 @@ import { UserReference, Gender, SizeChartEntry, HistoryItem } from '../types';
 import { getBrandById } from '../data';
 import { ShieldCheck, ChevronLeft, Footprints, ShoppingBag, Sparkles, MessageCircle, Info, Star, Send, ExternalLink, Tag, ChevronRight, Loader2 } from 'lucide-react';
 import { Language } from '../App';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 interface ShoppingOffer {
   siteName: string;
@@ -56,6 +56,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
   const fitConfidence = exactMatch ? 99 : 96;
 
   useEffect(() => {
+    // history save
     if (!hasSaved.current && result.eu !== 'N/A') {
       const historyItem: HistoryItem = {
         id: Math.random().toString(36).substr(2, 9),
@@ -72,15 +73,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
 
     const rawApiKey = import.meta.env.VITE_API_KEY || "";
     const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
-    if (!API_KEY) {
-      throw new Error("API Key configuration error (Netlify).");
-    }
+    if (!API_KEY) throw new Error("API Key configuration error (Netlify).");
 
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const imgModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-    // 1. Justification (Neden bu beden?)
+    let cancelled = false;
+
+    // 1) Justification
     const fetchJustification = async () => {
       setIsLoadingJustification(true);
       try {
@@ -88,61 +87,90 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
           Analyze this shoe fit:
           Ref Brand: ${reference.brand}, Foot: ${reference.cm}CM.
           Target: ${targetBrand.name} ${targetModel}, Suggestion: ${result.eu} EU.
-              
-          Write a short, professional justification (max 300 chars) explaining why this size fits. 
-          Mention fit difference (narrow/wide) if known.
+
+          Write a short, professional justification (max 300 chars) explaining why this size fits.
           Language: ${language === 'tr' ? 'Turkish' : 'English'}.
-          Do not use JSON, just plain text.
-        `;
-            
-        const results = await model.generateContent(prompt);
-        const response = await results.response;
-        setJustification(response.text());
+          Plain text only.
+        `.trim();
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            maxOutputTokens: 120,
+            temperature: 0.5,
+          }
+        });
+
+        if (!cancelled) setJustification(response.text ?? "");
       } catch (e) {
         console.error("Justification error", e);
-        setJustification(language === 'tr' ? "Analiz tamamlandı. Bedeninize uygun kalıp seçildi." : "Analysis complete. Optimal fit selected.");
+        if (!cancelled) {
+          setJustification(
+            language === 'tr'
+              ? "Analiz tamamlandı. Bedeninize uygun kalıp seçildi."
+              : "Analysis complete. Optimal fit selected."
+          );
+        }
       } finally {
-        setIsLoadingJustification(false);
+        if (!cancelled) setIsLoadingJustification(false);
       }
     };
 
+    // 2) Offers (JSON zorla)
     const fetchOffers = async () => {
       setIsLoadingOffers(true);
       try {
         const prompt = `
-          Act as a shopping assistant. 
-          Target: "${targetBrand.name} ${targetModel}".
+          Act as a shopping assistant.
+          Target: "${targetBrand.name} ${targetModel}"
 
-          Generate a JSON array of 3 popular Turkish shoe store objects for this shoe.
-          Format:
+          Return ONLY a JSON array of 3 Turkish store objects:
           [
-            { "siteName": "Trendyol", "price": "* TL", "url": "https://www.trendyol.com..." },
-            { "siteName": "SuperStep", "price": "* TL", "url": "..." }
+            { "siteName": "Trendyol", "price": "**** TL", "url": "https://..." },
+            ...
           ]
           Use realistic estimated prices.
-          Return ONLY raw JSON. No markdown formatting.
-        `;
+          No markdown, no extra text.
+        `.trim();
 
-        const results = await model.generateContent(prompt);
-        const response = await results.response;
-        const text = response.text().replace(/```json|```/g, '').trim();
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            // JSON çıktıyı daha “makine” hale getirir
+            responseMimeType: "application/json",
+            temperature: 0.4,
+          },
+        });
+
+        const text = (response.text ?? "").trim();
         const data = JSON.parse(text);
 
-        const enrichedOffers = data.map((item: any) => ({
-          ...item,
-          logo: `https://www.google.com/s2/favicons?domain=${new URL(item.url || 'https://google.com').hostname}&sz=128`
-        }));
-            
-        setOffers(enrichedOffers);
+        const enrichedOffers: ShoppingOffer[] = (Array.isArray(data) ? data : []).slice(0, 3).map((item: any) => {
+          const safeUrl = typeof item?.url === "string" ? item.url : "https://google.com";
+          let host = "google.com";
+          try { host = new URL(safeUrl).hostname; } catch {}
+          return {
+            siteName: String(item?.siteName ?? "Store"),
+            price: String(item?.price ?? "Fiyat Gör"),
+            url: safeUrl,
+            logo: `https://www.google.com/s2/favicons?domain=${host}&sz=128`,
+          };
+        });
+
+        if (!cancelled) setOffers(enrichedOffers);
       } catch (e) {
         console.error("Offers error", e);
-        setOffers([
-          { siteName: "Trendyol", price: "Fiyat Gör", url: `https://www.trendyol.com/sr?q=${targetBrand.name}+${targetModel}`, logo: "https://www.google.com/s2/favicons?domain=trendyol.com&sz=128" },
-          { siteName: "Hepsiburada", price: "Fiyat Gör", url: `https://www.hepsiburada.com/ara?q=${targetBrand.name}+${targetModel}`, logo: "https://www.google.com/s2/favicons?domain=hepsiburada.com&sz=128" },
-          { siteName: "Google Shopping", price: "Karşılaştır", url: `https://www.google.com/search?q=${targetBrand.name}+${targetModel}&tbm=shop`, logo: "https://www.google.com/s2/favicons?domain=google.com&sz=128" }
-        ]);
+        if (!cancelled) {
+          setOffers([
+            { siteName: "Trendyol", price: "Fiyat Gör", url: `https://www.trendyol.com/sr?q=${encodeURIComponent(targetBrand.name + " " + targetModel)}`, logo: "https://www.google.com/s2/favicons?domain=trendyol.com&sz=128" },
+            { siteName: "Hepsiburada", price: "Fiyat Gör", url: `https://www.hepsiburada.com/ara?q=${encodeURIComponent(targetBrand.name + " " + targetModel)}`, logo: "https://www.google.com/s2/favicons?domain=hepsiburada.com&sz=128" },
+            { siteName: "Google Shopping", price: "Karşılaştır", url: `https://www.google.com/search?q=${encodeURIComponent(targetBrand.name + " " + targetModel)}&tbm=shop`, logo: "https://www.google.com/s2/favicons?domain=google.com&sz=128" }
+          ]);
+        }
       } finally {
-        setIsLoadingOffers(false);
+        if (!cancelled) setIsLoadingOffers(false);
       }
     };
 
@@ -150,19 +178,23 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
     const fetchImage = async () => {
       setIsLoadingImage(true);
       try {
-        const res = new GoogleGenerativeAI({
-          model: 'gemini-2.5-flash-image',
-          contents: { parts: [{ text: `High-quality product photo of ${targetBrand.name} ${targetModel} sneaker, white studio background.` }] },
-          config: { imageConfig: { aspectRatio: "1:1" } }
+        const prompt = `High-quality product photo of ${targetBrand.name} ${targetModel} sneaker, white studio background, centered, sharp, no text.`;
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-image",
+          contents: [{ text: prompt }],
         });
-        const imgPart = res.candidates[0].content.parts.find(p => p.inlineData);
-        if (imgPart?.inlineData) {
+
+        const parts = response?.candidates?.[0]?.content?.parts ?? [];
+        const imgPart = parts.find((p: any) => p?.inlineData?.data);
+
+        if (!cancelled && imgPart?.inlineData?.data) {
           setModelImage(`data:image/png;base64,${imgPart.inlineData.data}`);
         }
       } catch (e) {
         console.error("Image error", e);
       } finally {
-        setIsLoadingImage(false);
+        if (!cancelled) setIsLoadingImage(false);
       }
     };
 
