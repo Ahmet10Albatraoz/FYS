@@ -15,8 +15,8 @@ RUN npm install
 COPY . .
 
 # Build argümanlarını tanımla
-ARG VITE_GEMINI_API_KEY
-ENV VITE_GEMINI_API_KEY=$VITE_GEMINI_API_KEY
+ARG VITE_API_KEY
+ENV VITE_API_KEY=$VITE_API_KEY
 
 # Uygulamayı derle
 RUN npm run build
