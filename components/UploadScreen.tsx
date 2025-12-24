@@ -13,7 +13,7 @@ interface UploadScreenProps {
   language: Language;
   t: any;
 }
-
+const API_KEY = import.meta.env.API_KEY;
 const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome, language, t }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scannedData, setScannedData] = useState<UserReference | null>(null);
@@ -36,7 +36,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
         reader.readAsDataURL(file);
       });
 
-      const API_KEY = process.env.API_KEY;
+      
       const genAI = new GoogleGenerativeAI(API_KEY);
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
