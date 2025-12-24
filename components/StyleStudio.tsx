@@ -36,13 +36,19 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
     { id: 'night', label: t.styleNight, icon: Watch }
   ];
 
+  const rawApiKey = import.meta.env.VITE_API_KEY || "";
+  const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
+  if (!API_KEY) {
+    throw new Error("API Key configuration error (Netlify).");
+  }
+
   const handleGenerateStyle = async () => {
     setIsGenerating(true);
     setStyleResult(null);
     setLookImage(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: API_KEY });
       const schema = {
         type: Type.OBJECT,
         properties: {
@@ -77,7 +83,7 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
     setIsVisualizing(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: API_KEY });
       const prompt = `A professional editorial fashion photograph of a person wearing ${brand} ${model} sneakers, styled with a ${occasion} outfit including ${styleResult.top}, ${styleResult.bottom}, and ${styleResult.acc}. Soft studio lighting, minimalist background, highly detailed textures, 8k resolution fashion photography.`;
 
       const response = await ai.models.generateContent({

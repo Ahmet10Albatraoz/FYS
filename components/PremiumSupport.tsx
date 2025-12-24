@@ -15,8 +15,14 @@ interface PremiumSupportProps {
   language: Language;
   t: any;
 }
-const API_KEY = import.meta.env.API_KEY;
-const PremiumSupport: React.FC<PremiumSupportProps> = ({ isOpen, onClose, language, t }) => {
+
+  const rawApiKey = import.meta.env.VITE_API_KEY || "";
+  const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
+  if (!API_KEY) {
+    throw new Error("API Key configuration error (Netlify).");
+  }
+
+  const PremiumSupport: React.FC<PremiumSupportProps> = ({ isOpen, onClose, language, t }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);

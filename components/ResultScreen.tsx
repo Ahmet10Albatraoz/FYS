@@ -70,7 +70,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({
       hasSaved.current = true;
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const rawApiKey = import.meta.env.VITE_API_KEY || "";
+    const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
+    if (!API_KEY) {
+      throw new Error("API Key configuration error (Netlify).");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
     // 1. Justification (Neden bu beden?) - Bağımsız ve hızlı
     const fetchJustification = async () => {
