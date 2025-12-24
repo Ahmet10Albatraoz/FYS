@@ -1,20 +1,20 @@
 # --- Aşama 1: Derleme (Builder) ---
-# Sizin örneğinizdeki gibi Node 22 sürümünü kullanıyoruz
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Cache optimizasyonu için bağımlılık dosyalarını kopyala
+# Bağımlılık dosyalarını kopyala
 COPY package.json package-lock.json ./
 
-# 'npm install' yerine 'npm ci' kullanıyoruz (lock dosyasına sadık kalır ve daha güvenlidir)
-RUN npm ci
+# DÜZELTME: 'npm ci' yerine 'npm install' kullanıyoruz.
+# npm ci, lock dosyası package.json ile senkronize değilse hata verir.
+# npm install ise eksikleri tamamlar ve kuruluma devam eder.
+RUN npm install
 
 # Tüm proje dosyalarını kopyala
 COPY . .
 
 # Coolify'da tanımladığınız VITE_API_KEY'i build aşamasına dahil et
-# Coolify'da "Build Arguments" veya "Environment Variables" kısmında bu değişkenin tanımlı olduğundan emin olun.
 ARG VITE_API_KEY
 ENV VITE_API_KEY=$VITE_API_KEY
 
@@ -22,11 +22,9 @@ ENV VITE_API_KEY=$VITE_API_KEY
 RUN npm run build
 
 # --- Aşama 2: Sunum (Production) ---
-# Statik dosyaları sunmak için Nginx kullanıyoruz
 FROM nginx:alpine
 
 # React Router için Nginx Ayarı
-# (Bu ayar olmazsa, alt sayfalarda F5 yapınca 404 hatası alırsınız)
 RUN echo 'server { \
     listen 80; \
     location / { \
