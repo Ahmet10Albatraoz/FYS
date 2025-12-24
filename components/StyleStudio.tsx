@@ -36,7 +36,6 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
     { id: 'night', label: t.styleNight, icon: Watch }
   ];
 
-  // API Key Kontrolü
   const rawApiKey = import.meta.env.VITE_API_KEY || "";
   const API_KEY = rawApiKey.replace(/['"]/g, '').trim();
 
@@ -48,9 +47,10 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
     setError(null);
 
     try {
-      if (!API_KEY) throw new Error("API Key eksik.");
+      if (!API_KEY) throw new Error("API Key configuration error.");
 
       const genAI = new GoogleGenerativeAI(API_KEY);
+      // Metin için standart flash modelini kullanıyoruz
       const modelInstance = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const prompt = `
@@ -72,70 +72,69 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
     } catch (err: any) {
       console.error("Text Gen Error:", err);
       setError(language === 'tr' ? "Stil oluşturulamadı." : "Could not generate style.");
+      // Fallback data
+      setStyleResult({
+        top: "Basic T-Shirt",
+        bottom: "Jeans",
+        acc: "Watch",
+        tip: "Keep it simple."
+      });
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // 2. ADIM: GÖRSEL OLUŞTURMA (Imagen 3 - REST API)
+  // 2. ADIM: GÖRSEL OLUŞTURMA (gemini-2.5-flash-image)
   const handleVisualize = async () => {
     if (!styleResult) return;
     setIsVisualizing(true);
     setError(null);
 
     try {
-      // Prompt Hazırlığı: Ayakkabı ve stil bilgilerini birleştiriyoruz
-      const imagePrompt = `
-        A high quality, photorealistic full-body fashion photography of a person wearing ${brand} ${model} sneakers.
-        Outfit details: ${styleResult.top}, ${styleResult.bottom}.
+      const genAI = new GoogleGenerativeAI(API_KEY);
+      
+      // İsteğine uygun olarak 'gemini-2.5-flash-image' modelini seçiyoruz
+      const modelInstance = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+
+      const prompt = `
+        Fashion photography, full body shot.
+        Person wearing ${brand} ${model} sneakers.
+        Outfit: ${styleResult.top}, ${styleResult.bottom}.
         Accessory: ${styleResult.acc}.
-        Setting: Studio background suitable for ${occasion} look.
-        Lighting: Professional fashion lighting, 8k resolution, highly detailed texture.
+        Style: ${occasion}. High quality, photorealistic, 4k.
       `;
 
-      // Google Imagen 3 API Endpoint'i (REST API Kullanımı)
-      // Not: SDK yerine fetch kullanıyoruz çünkü Imagen endpoint'i standart SDK'da farklılık gösterebiliyor.
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            instances: [
-              { prompt: imagePrompt }
-            ],
-            parameters: {
-              sampleCount: 1,
-              aspectRatio: "3:4" // Portre modu için ideal
-            }
-          })
-        }
-      );
+      // Bu modelden görsel beklediğimiz için yanıt yapısını kontrol edip Base64 alıyoruz
+      const result = await modelInstance.generateContent(prompt);
+      const response = await result.response;
+      
+      // Yanıt içerisinden inlineData (görsel) verisini bulmaya çalışıyoruz
+      // SDK sürümüne göre candidates[0].content.parts içinde olabilir
+      const candidates = response.candidates;
+      let imageBase64 = null;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || "Image generation failed");
+      if (candidates && candidates[0] && candidates[0].content && candidates[0].content.parts) {
+        for (const part of candidates[0].content.parts) {
+          if (part.inlineData && part.inlineData.data) {
+            imageBase64 = part.inlineData.data;
+            break;
+          }
+        }
       }
 
-      const data = await response.json();
-      
-      // Gelen veri Base64 formatındadır (predictions[0].bytesBase64Encoded)
-      // API yapısına göre bazen "bytesBase64Encoded" bazen sadece base64 string dönebilir, kontrol edelim.
-      const base64Image = data.predictions?.[0]?.bytesBase64Encoded || data.predictions?.[0];
-
-      if (base64Image) {
-        setLookImage(`data:image/png;base64,${base64Image}`);
+      if (imageBase64) {
+        setLookImage(`data:image/png;base64,${imageBase64}`);
       } else {
-        throw new Error("No image data returned");
+        // Eğer model metin döndürürse veya görsel yoksa hata fırlat
+        console.warn("Model did not return inlineData image. Raw response:", response);
+        throw new Error("No image data in response.");
       }
 
     } catch (err: any) {
       console.error("Image Gen Error:", err);
       setError(language === 'tr' 
-        ? "Görüntü oluşturulamadı (Yetki veya Model Hatası)." 
-        : "Image generation failed (Auth or Model Error).");
+        ? "Görüntü oluşturulamadı. Model henüz bölgenizde aktif olmayabilir." 
+        : "Image generation failed. Model might not be available.");
     } finally {
       setIsVisualizing(false);
     }
@@ -252,7 +251,7 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
                         <Loader2 size={48} className="text-blue-700 animate-spin relative z-10" />
                       </div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                        {language === 'tr' ? 'IMAGEN 3 GÖRÜNTÜ OLUŞTURUYOR...' : 'IMAGEN 3 GENERATING...'}
+                        {language === 'tr' ? 'GEMINI IMAGE OLUŞTURUYOR...' : 'GEMINI GENERATING IMAGE...'}
                       </p>
                     </div>
                   ) : lookImage ? (
@@ -260,7 +259,7 @@ const StyleStudio: React.FC<StyleStudioProps> = ({ isOpen, onClose, brand, model
                       <img src={lookImage} alt="AI Style look" className="w-full rounded-[3rem] shadow-2xl border-4 border-white object-cover max-h-[500px]" />
                       <div className="absolute top-6 left-6 bg-slate-950 text-white px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest backdrop-blur-md bg-opacity-70 flex items-center gap-2">
                          <Sparkles size={10} className="text-blue-400" />
-                         IMAGEN 3 AI GENERATED
+                         AI GENERATED LOOK
                       </div>
                     </div>
                   ) : (
