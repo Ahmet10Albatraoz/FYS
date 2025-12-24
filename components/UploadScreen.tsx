@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { Camera, Upload, Scan, Sparkles, ChevronLeft, Footprints, CheckCircle2, AlertCircle } from 'lucide-react';
 import { BRANDS } from '../data';
 import { UserReference } from '../types';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Language } from '../App';
 
 interface UploadScreenProps {
@@ -13,11 +13,7 @@ interface UploadScreenProps {
   language: Language;
   t: any;
 }
-const API_KEY = import.meta.env?.VITE_API_KEY || process.env.REACT_API_KEY;
 
-if (!API_KEY) {
-  console.error("API KEY BULUNAMADI! .env dosyasını ve isimlendirmeyi (VITE_ veya REACT_APP_) kontrol et.");
-}
 const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome, language, t }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scannedData, setScannedData] = useState<UserReference | null>(null);
@@ -27,6 +23,14 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
   const processImageWithGemini = async (file: File, imageUrl: string) => {
     setIsAnalyzing(true);
     setError(null);
+
+    const API_KEY = import.meta.env?.VITE_API_KEY || process.env.REACT_API_KEY;
+
+    if (!API_KEY) {
+      console.error("API KEY BULUNAMADI! .env dosyasını ve isimlendirmeyi (VITE_ veya REACT_APP_) kontrol et.");
+    }
+    
+    console.log("DEBUG: API Key Check:", API_KEY ? "Found (masked)" : "NOT FOUND");
 
     try {
       const base64Data = await new Promise<string>((resolve, reject) => {
@@ -40,46 +44,44 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
         reader.readAsDataURL(file);
       });
 
+      const ai = new GoogleGenAI({ apiKey });
+
+      const schema = {
+        type: Type.OBJECT,
+        properties: {
+          brand: { type: Type.STRING, description: "Official brand name (e.g. Nike, Adidas)." },
+          model: { type: Type.STRING, description: "Full model name if visible." },
+          cm: { type: Type.NUMBER, description: "Centimeter size found on label (CM, JP, or JPN)." },
+          eu: { type: Type.STRING, description: "EU size found on label." }
+        },
+        required: ["brand", "cm"],
+      };
+
+      console.log("DEBUG: Sending request to Gemini...");
       
-      const genAI = new GoogleGenerativeAI(API_KEY);
-
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-      const promt = `
-        Analyze the shoe label image.
-        1. Identify the Brand (Nike, Adidas, Puma, etc.).
-        2. Find the CM (or JP/JPN) value. This is crucial.
-        3. Find the EUR (or FR/EU) size.
-        
-        Return ONLY a JSON object:
-        {
-            "brand": "string (lowercase id like 'nike', 'adidas')",
-            "cm": number,
-            "eu": "string",
-            "model": "string (estimated model name if visible)"
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: file.type, data: base64Data } },
+            { text: `Extract technical shoe label data. Prioritize finding the Centimeter (CM/JP/JPN) value. Ensure Brand name matches global standards. Return JSON only.` }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
         }
-        If fields are missing, set to null. Do not use markdown formatting.
-      `; 
+      });
 
-      const result = await model.generateContent([
-        promt,
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType: file.type
-          }
-        }
-      ]);
+      const resultText = response.text;
+      console.log("DEBUG: Gemini Response Received:", resultText);
 
-      const response = await result.response;
-      const text = response.text();
+      if (!resultText) throw new Error("No data extracted.");
       
-      const jsonStr = text.replace(/```json|```/g, '').trim();
-      const parsedResult = JSON.parse(jsonStr);
+      const parsedResult = JSON.parse(resultText);
 
       let matchedBrandId = 'nike';
-      const detectedBrandLower = parsedResult.brand?.toLowerCase() || '';
-      
+      const detectedBrandLower = (parsedResult.brand || '').toLowerCase();
       const foundBrand = BRANDS.find(b => 
         detectedBrandLower.includes(b.id) || 
         detectedBrandLower.includes(b.name.toLowerCase())
@@ -89,9 +91,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
 
       setScannedData({
         brand: matchedBrandId,
-        detectedModel: parsedResult.model || (language === 'tr' ? 'Standart Model' : 'Standard Model'),
+        detectedModel: parsedResult.model || (language === 'tr' ? 'Algılanan Model' : 'Detected Model'),
         cm: parsedResult.cm || 0,
-        eu: parsedResult.eu?.toString() || '',
+        eu: parsedResult.eu || '',
         image: imageUrl
       });
 
@@ -110,6 +112,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
 
       setError(errorMessage);
       
+      // Fallback: Kullanıcının manuel girmesi için ekranı aç
       setScannedData({
         brand: 'nike',
         cm: 0,
@@ -262,4 +265,3 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onComplete, onBack, onHome,
 };
 
 export default UploadScreen;
-
