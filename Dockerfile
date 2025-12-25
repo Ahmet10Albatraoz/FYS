@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Paketleri yükle
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 # Tüm dosyaları içeri at ve build al
 COPY . .
