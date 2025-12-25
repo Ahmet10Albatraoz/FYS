@@ -1,5 +1,5 @@
 # --- 1. Aşama: Build (Node.js) ---
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Konteyner içinde /app diye bir klasör açar (senin pc'de olmasına gerek yok)
 WORKDIR /app
